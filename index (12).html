@@ -1,0 +1,552 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Ludogrammes – Jeux de société</title>
+<style>
+:root{--bg:#111827;--panel:#1f2937;--accent:#f59e0b;--good:#22c55e;--text:#f9fafb;--muted:#cbd5e1;--bad:#ef4444}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at top,#263449,#111827 65%);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,sans-serif;min-height:100vh}
+main{max-width:850px;margin:auto;padding:22px;min-height:100vh;display:flex;align-items:center;justify-content:center}
+.screen{width:100%;text-align:center}.hidden{display:none!important}
+h1{font-size:clamp(2rem,7vw,4rem);margin:.2em 0}.subtitle{color:var(--muted);font-size:1.2rem}
+button{border:0;border-radius:16px;padding:16px 24px;font-size:1.15rem;font-weight:700;cursor:pointer;min-height:52px}
+button:disabled{opacity:.45;cursor:default}
+.primary{background:var(--accent);color:#111827}.secondary{background:#374151;color:white}.danger{background:var(--bad);color:white}
+.ghost{background:transparent;color:var(--muted);border:1px solid #475569;min-height:auto;padding:10px 16px;font-size:.95rem}
+#timer{font-size:clamp(3rem,12vw,6rem);font-variant-numeric:tabular-nums;font-weight:800;line-height:1}
+#letters{font-size:clamp(2.2rem,9vw,5rem);font-weight:900;letter-spacing:.12em;margin:20px 0 10px;padding:25px 12px;background:rgba(255,255,255,.08);border-radius:24px;word-break:break-word}
+#hint{font-size:clamp(1.5rem,6.5vw,2.6rem);letter-spacing:.28em;color:var(--muted);margin:0 0 16px;font-weight:800;min-height:1.5em}
+.stats{display:flex;justify-content:center;gap:28px;margin:15px 0;font-size:1.3rem}.score{color:var(--good);font-weight:800}
+.statusRow{display:flex;align-items:center;justify-content:center;gap:10px}
+#status{min-height:34px;color:var(--muted);font-size:1.05rem}#status strong{color:var(--accent);font-size:1.2em}
+.mic-dot{display:inline-block;width:13px;height:13px;border-radius:50%;background:var(--bad);flex:none;animation:pulse 1.2s infinite}
+@keyframes pulse{0%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(1.5)}100%{opacity:1;transform:scale(1)}}
+.controls{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-top:20px}
+#resultScore{font-size:clamp(4rem,16vw,8rem);font-weight:900;color:var(--accent)}
+.setup{background:rgba(255,255,255,.07);padding:22px;border-radius:20px;margin:25px 0;text-align:left}
+label{display:block;margin:10px 0 6px;font-weight:700}input{width:100%;padding:14px;border-radius:12px;border:1px solid #64748b;background:#111827;color:white;font-size:1.05rem}
+.small{font-size:.9rem;color:var(--muted);line-height:1.45}
+#manual{display:flex;gap:8px;margin:16px auto;max-width:620px}#manual input{flex:1}
+#debug{font-size:.8rem;color:#94a3b8;margin-top:12px;min-height:18px}
+#summaryLists p{margin:10px 0;text-align:left}
+.saveScoreBox{background:rgba(255,255,255,.07);padding:18px;border-radius:16px;margin:18px auto;max-width:420px;text-align:left}
+.saveScoreBox .row{display:flex;gap:8px;margin-top:10px}.saveScoreBox .row input{flex:1}
+#highScores{max-width:420px;margin:0 auto 20px;text-align:left}
+#highScores div{padding:4px 0}
+</style>
+</head>
+<body>
+<main>
+<section id="start" class="screen">
+<h1>🎲 Ludogrammes</h1>
+<div class="subtitle">Devine le nom du jeu de société !</div>
+<div class="setup">
+<label for="duration">Durée (minutes)</label>
+<input id="duration" type="number" min="1" max="30" value="5">
+<p class="small">Le micro écoute les propositions. Une bonne réponse passe automatiquement au jeu suivant. Dis <b>« passe »</b> pour passer.</p>
+</div>
+<button id="startBtn" class="primary">▶ Démarrer</button>
+<div style="margin-top:14px"><button id="fullscreenBtnStart" class="ghost">⛶ Plein écran</button></div>
+<p id="support" class="small"></p>
+<div id="highScoresStart"></div>
+</section>
+
+<section id="game" class="screen hidden">
+<div id="timer">05:00</div>
+<div class="stats"><div>✓ <span id="score" class="score">0</span> bonnes réponses</div><div>Jeu <span id="index">1</span></div></div>
+<div id="letters">—</div>
+<div id="hint"></div>
+<div class="statusRow"><span id="micDot" class="mic-dot hidden"></span><div id="status">🎤 Écoute...</div></div>
+<div class="controls">
+<button id="masterBtn" class="primary">✅ Bonne réponse</button>
+<button id="passBtn" class="secondary">⏭ Passer</button>
+<button id="undoBtn" class="secondary" disabled>↩ Annuler</button>
+</div>
+<div class="controls" style="margin-top:8px">
+<button id="pauseBtn" class="ghost">⏸ Pause</button>
+<button id="fullscreenBtnGame" class="ghost">⛶ Plein écran</button>
+<button id="stopBtn" class="danger">■ Arrêter</button>
+</div>
+<p class="small" style="text-align:center;max-width:520px;margin:8px auto 0">Le bouton « Bonne réponse » sert au maître du jeu : à utiliser si une réponse correcte n'a pas été détectée par le micro.</p>
+<div id="manual">
+<input id="manualInput" placeholder="Secours : écrire une réponse…">
+<button id="manualBtn" class="secondary">Valider</button>
+</div>
+<div id="debug"></div>
+</section>
+
+<section id="end" class="screen hidden">
+<div class="subtitle">TEMPS ÉCOULÉ !</div>
+<div id="resultScore">0</div>
+<h2>jeux trouvés</h2>
+<div id="summaryLists" class="small" style="max-width:560px;margin:0 auto 20px"></div>
+<div class="saveScoreBox">
+<label for="playerName">Nom du joueur ou de l'équipe</label>
+<div class="row">
+<input id="playerName" type="text" placeholder="Ton nom" maxlength="30">
+<button id="saveScoreBtn" class="secondary">💾 Enregistrer</button>
+</div>
+</div>
+<div id="highScores"></div>
+<button id="againBtn" class="primary">↻ Rejouer</button>
+</section>
+</main>
+
+<script>
+const GAMES = [
+"Azul","Catan","Dixit","Splendor","Carcassonne","7 Wonders","7 Wonders Duel","Ark Nova",
+"Ticket to Ride","Les Aventuriers du Rail","Pandemic","Codenames","So Clover","Sky Team",
+"Kingdomino","Wingspan","Root","Scythe","Terraforming Mars","Cascadia","Calico","Patchwork",
+"Jaipur","Love Letter","Dobble","Time's Up","Concept","Just One","The Crew","Clank!",
+"Takenoko","Sushi Go!","Hanabi","Citadelles","Mysterium","Photosynthesis","Parks","Heat",
+"Flamme Rouge","Harmonies","Akropolis","Challengers!","Earth","Everdell","Viticulture",
+"Brass Birmingham","Great Western Trail","Lost Ruins of Arnak","Dune Imperium","Gizmos",
+"Res Arcana","Welcome To","Welcome To The Dungeon","King of Tokyo","King of New York",
+"Small World","Puerto Rico","Dominion","Agricola","Le Havre","Concordia","Tzolk'in",
+"Orléans","Clans of Caledonia","Architectes du Royaume de l'Ouest","Paladins du Royaume de l'Ouest",
+"Champions of Midgard","Five Tribes","Lords of Waterdeep","Everdell","Century","Jaipur",
+"Splendor Duel","Patchwork Doodle","Cartographers","Railroad Ink","Railroad Tycoon",
+"Scout","Scout","Sea Salt & Paper","Faraway","Trio","Captain Flip","Harmonies","Pixies",
+"Mindbug","Unmatched","Star Realms","Hero Realms","Kingdom Builder","Forbidden Island",
+"Forbidden Desert","Marrakech","Santorini","Sagrada","Tapestry","Eclipse","Nemesis",
+"Blood Rage","Root","Oath","Inis","Kemet","Cyclades","7 Wonders Architects","Quadropolis",
+"Decrypto","Insider","Wavelength","Compatibility","Top Ten","Krazy Wordz","Dixit Odyssey",
+"Concept Kids","Dragomino","Karuba","Paleo","Living Forest","Dorfromantik","Caper Europe"
+];
+
+const $ = id => document.getElementById(id);
+let current=null, score=0, gameNo=0, endAt=0, timerId=null, recognition=null, listening=false,
+    reshuffleTimer=null, countdownTimer=null, hintRevealed=0, lastTickSec=null,
+    audioCtx=null, wakeLock=null, foundGames=[], passedGames=[],
+    sharedOrder=[], wordPointer=0, undoState=null,
+    paused=false, pauseStarted=0, pausedDuringCountdown=false;
+function clearReshuffle(){if(reshuffleTimer){clearInterval(reshuffleTimer);reshuffleTimer=null}}
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
+}
+function shuffledGames(){
+  const arr=[...new Set(GAMES)]; // retire les titres qui figuraient deux fois dans la liste
+  for(let i=arr.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [arr[i],arr[j]]=[arr[j],arr[i]]; }
+  return arr;
+}
+
+// --- Son ------------------------------------------------------------
+function beep(freq,dur,type,vol){
+  if(!audioCtx) return;
+  try{
+    const osc=audioCtx.createOscillator(), gain=audioCtx.createGain();
+    osc.type=type||"sine"; osc.frequency.value=freq;
+    gain.gain.value=vol!==undefined?vol:0.2;
+    osc.connect(gain); gain.connect(audioCtx.destination);
+    const t=audioCtx.currentTime;
+    osc.start(t);
+    gain.gain.exponentialRampToValueAtTime(0.001,t+dur);
+    osc.stop(t+dur+0.03);
+  }catch(e){}
+}
+function playCorrect(){ beep(880,0.12,"sine",0.28); setTimeout(()=>beep(1320,0.16,"sine",0.28),110); }
+function playTick(){ beep(440,0.06,"square",0.15); }
+function playEnd(){ beep(180,0.5,"sawtooth",0.22); }
+function playCountdown(){ beep(660,0.08,"sine",0.2); }
+
+// --- Écran toujours allumé -------------------------------------------
+async function requestWakeLock(){
+  try{ if("wakeLock" in navigator){ wakeLock=await navigator.wakeLock.request("screen"); wakeLock.addEventListener("release",()=>{wakeLock=null}); } }catch(e){}
+}
+function releaseWakeLock(){ if(wakeLock){ try{wakeLock.release()}catch(e){} wakeLock=null; } }
+document.addEventListener("visibilitychange",()=>{
+  if(document.visibilityState==="visible" && listening && !wakeLock) requestWakeLock();
+});
+
+// --- Plein écran ------------------------------------------------------
+function toggleFullscreen(){
+  if(!document.fullscreenElement){ document.documentElement.requestFullscreen().catch(()=>{}); }
+  else{ document.exitFullscreen().catch(()=>{}); }
+}
+$("fullscreenBtnStart").onclick=toggleFullscreen;
+$("fullscreenBtnGame").onclick=toggleFullscreen;
+
+// --- Meilleurs scores (localStorage) -----------------------------------
+function loadHighScores(){
+  try{ return JSON.parse(localStorage.getItem("anagrammes_highscores")||"[]"); }catch(e){ return []; }
+}
+function renderHighScores(){
+  const list=loadHighScores();
+  const html = !list.length ? "" :
+    "<p><b>🏆 Meilleurs scores</b></p>"+list.map((e,i)=>
+      "<div>"+(i+1)+". "+escapeHtml(e.name)+" — <b>"+e.score+"</b> <span style='color:var(--muted)'>("+escapeHtml(e.date)+")</span></div>"
+    ).join("");
+  $("highScores").innerHTML=html;
+  $("highScoresStart").innerHTML=html;
+}
+$("saveScoreBtn").onclick=()=>{
+  const name=($("playerName").value||"").trim().slice(0,30)||"Anonyme";
+  try{
+    const list=loadHighScores();
+    list.push({name, score, date:new Date().toLocaleDateString("fr-CA")});
+    list.sort((a,b)=>b.score-a.score);
+    localStorage.setItem("anagrammes_highscores", JSON.stringify(list.slice(0,10)));
+  }catch(e){}
+  renderHighScores();
+  $("saveScoreBtn").disabled=true;
+  $("saveScoreBtn").textContent="✓ Enregistré";
+};
+
+// --- Indice progressif ---------------------------------------------
+const LETTERISH=/[A-ZÀ-ÖØ-Ý0-9]/i;
+function updateHint(){
+  if(!current || hintRevealed<=0){ $("hint").textContent=""; return; }
+  let count=0, out="";
+  for(const ch of current){
+    if(LETTERISH.test(ch)){ out+= count<hintRevealed ? ch.toUpperCase() : "_"; count++; }
+    else out+=ch;
+  }
+  $("hint").textContent=out;
+}
+
+const NUM_WORDS={"zero":"0","un":"1","une":"1","deux":"2","trois":"3","quatre":"4","cinq":"5",
+  "six":"6","sept":"7","huit":"8","neuf":"9","dix":"10","onze":"11","douze":"12","treize":"13",
+  "quatorze":"14","quinze":"15","seize":"16","vingt":"20",
+  "one":"1","two":"2","three":"3","four":"4","five":"5","seven":"7","eight":"8",
+  "nine":"9","ten":"10","eleven":"11","twelve":"12","thirteen":"13","fourteen":"14",
+  "fifteen":"15","sixteen":"16","twenty":"20"};
+function wordsToDigits(s){
+  return s.split(" ").map(w=>NUM_WORDS[w]!==undefined?NUM_WORDS[w]:w).join(" ");
+}
+// Tournures d'introduction fréquentes (FR/EN) à ignorer avant comparaison,
+// car un joueur dit rarement le titre tout seul.
+const FILLER_RE=/^(c est|ce jeu s appelle|je dirais|je pense que c est|je pense a|je crois que c est|moi c est|peut etre|c est peut etre|the answer is|it s|i think it s|maybe it s|my answer is)\s+/;
+function stripFillers(s){
+  let out=s, guard=0;
+  while(FILLER_RE.test(out) && guard++<3) out=out.replace(FILLER_RE,"");
+  return out.trim();
+}
+function normalize(s){
+  let out=s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"")
+    .replace(/[’']/g,"'").replace(/[^a-z0-9]+/g," ").trim().replace(/\s+/g," ");
+  out=stripFillers(out);
+  return wordsToDigits(out);
+}
+function compact(s){return normalize(s).replace(/\s/g,"");}
+// Simple Levenshtein edit distance, used to tolerate small mic mis-hearings.
+function levenshtein(a,b){
+  const m=a.length,n=b.length;
+  if(!m) return n; if(!n) return m;
+  const dp=Array.from({length:m+1},(_,i)=>[i,...Array(n).fill(0)]);
+  for(let j=0;j<=n;j++) dp[0][j]=j;
+  for(let i=1;i<=m;i++)for(let j=1;j<=n;j++){
+    dp[i][j]=a[i-1]===b[j-1]?dp[i-1][j-1]:1+Math.min(dp[i-1][j],dp[i][j-1],dp[i-1][j-1]);
+  }
+  return dp[m][n];
+}
+function fuzzyEqual(a,b){
+  if(a===b) return true;
+  const maxLen=Math.max(a.length,b.length);
+  if(maxLen<4) return false; // too short to risk fuzzy matching
+  const threshold=maxLen<=6?1:maxLen<=10?2:maxLen<=16?3:4;
+  return levenshtein(a,b)<=threshold;
+}
+// Garde la première lettre + les consonnes (sans doublons consécutifs).
+// Utile quand un mot anglais dit avec un accent français est retranscrit
+// avec des voyelles très différentes : le squelette reste souvent proche.
+function skeleton(s){
+  if(!s) return "";
+  let out=s[0];
+  for(let i=1;i<s.length;i++){
+    const ch=s[i];
+    if("aeiouy".includes(ch)) continue;
+    if(ch===out[out.length-1]) continue;
+    out+=ch;
+  }
+  return out;
+}
+// Titres qui ont une traduction française officielle différente et connue.
+// Dites-moi les autres titres que votre groupe utilise et je les ajoute ici.
+const ALIASES={
+  "Catan":["Catane","Les Colons de Catane"]
+};
+function acceptedSpeech(s){
+  const n=normalize(s), c=compact(s);
+  if(n==="passe" || n==="passer" || n==="on passe" || n==="suivant") return "PASS";
+  const target=normalize(current);
+  const tc=compact(current);
+  if(n===target || c===tc) return true;
+  // Allow omission of leading articles and common plural/singular variation.
+  const variants=new Set([target.replace(/^(le|la|les|un|une|the)\s+/,""),
+    tc.replace(/^(le|la|les|un|une|the)/,"")]);
+  for(const alias of (ALIASES[current]||[])){
+    variants.add(normalize(alias)); variants.add(compact(alias));
+  }
+  if(variants.has(n) || variants.has(c)) return true;
+  // Tolerate small mic mis-hearings (accents, extra/missing letter, etc.).
+  if(fuzzyEqual(c,tc)) return true;
+  for(const v of variants) if(fuzzyEqual(c,v.replace(/\s/g,""))) return true;
+  // Filet de sécurité pour l'anglais prononcé à la française : compare
+  // le squelette de consonnes, plus robuste aux voyelles mal transcrites.
+  if(fuzzyEqual(skeleton(c),skeleton(tc))) return true;
+  // Pour les titres à plusieurs mots : accepte un ordre différent ou un
+  // article manquant/en trop, tant que chaque mot se retrouve à peu près.
+  if(target.includes(" ")){
+    const wordEq=(x,y)=>x===y||(x.length>=3&&y.length>=3&&fuzzyEqual(x,y));
+    const ta=n.split(" ").filter(w=>!["le","la","les","un","une","the","of","a"].includes(w)).sort();
+    const tb=target.split(" ").filter(w=>!["le","la","les","un","une","the","of","a"].includes(w)).sort();
+    if(ta.length===tb.length && ta.length>0 && ta.every((w,i)=>wordEq(w,tb[i]))) return true;
+  }
+  return false;
+}
+function shuffleLetters(s){
+  let chars=[...s.toUpperCase()].filter(c=>/[A-ZÀ-ÖØ-Ý0-9]/i.test(c));
+  let original=chars.join("");
+  for(let k=0;k<30;k++){
+    chars.sort(()=>Math.random()-0.5);
+    if(chars.join("")!==original) break;
+  }
+  return chars.join("  ");
+}
+// Affiche le mot courant (lettres mélangées) et (re)lance le minuteur qui
+// révèle l'indice et remélange les lettres toutes les 5 secondes.
+function presentCurrent(){
+  clearReshuffle();
+  $("letters").textContent=shuffleLetters(current);
+  $("index").textContent=String(gameNo+1);
+  reshuffleTimer=setInterval(()=>{
+    if(current){
+      $("letters").textContent=shuffleLetters(current);
+      hintRevealed++;
+      updateHint();
+    }
+  },5000);
+}
+// Puise dans un ordre mélangé une fois pour toute la partie, en bouclant si
+// la liste est épuisée avant la fin du temps.
+function pickNext(){
+  current=sharedOrder[wordPointer % sharedOrder.length];
+  wordPointer++;
+  hintRevealed=0;
+  $("hint").textContent=""; // pas d'indice tout de suite : il apparaît après 5s
+  presentCurrent();
+  $("status").textContent="🎤 Écoute…";
+}
+// Petit décompte 3-2-1 avant chaque nouveau mot, pour laisser le temps de
+// se repositionner entre deux manches.
+function showCountdownThenPick(){
+  clearReshuffle();
+  if(countdownTimer){clearInterval(countdownTimer);countdownTimer=null}
+  if(Date.now()>=endAt) return;
+  current=null;
+  $("hint").textContent="";
+  let n=3;
+  $("letters").textContent=String(n);
+  $("status").innerHTML="Prépare-toi…<br>"+$("status").innerHTML;
+  playCountdown();
+  countdownTimer=setInterval(()=>{
+    if(Date.now()>=endAt){ clearInterval(countdownTimer); countdownTimer=null; return; }
+    n--;
+    if(n>0){ $("letters").textContent=String(n); playCountdown(); }
+    else{ clearInterval(countdownTimer); countdownTimer=null; pickNext(); }
+  },1000);
+}
+function updateTimer(){
+  const left=Math.max(0,endAt-Date.now());
+  const sec=Math.ceil(left/1000);
+  $("timer").textContent=String(Math.floor(sec/60)).padStart(2,"0")+":"+String(sec%60).padStart(2,"0");
+  if(sec<=10 && sec>0 && sec!==lastTickSec){ lastTickSec=sec; playTick(); }
+  if(left<=0) finish();
+}
+function setUndo(type,word){
+  undoState={type,word};
+  $("undoBtn").disabled=false;
+}
+function handleAnswer(text){
+  if(!current || Date.now()>=endAt) return;
+  const result=acceptedSpeech(text);
+  $("debug").textContent="Entendu : "+text;
+  if(result==="PASS"){
+    const justSolved=current;
+    current=null; // verrouille tout de suite : une 2e alternative du même énoncé ne comptera plus
+    clearReshuffle();
+    passedGames.push(justSolved);
+    setUndo("pass",justSolved);
+    $("status").innerHTML="⏭ Passé ! — <strong>"+justSolved+"</strong>";
+    gameNo++; setTimeout(()=>{if(Date.now()<endAt)showCountdownThenPick()},1400);
+  }else if(result===true){
+    const justSolved=current;
+    current=null; // idem : empêche le double comptage d'une même bonne réponse
+    clearReshuffle();
+    foundGames.push(justSolved);
+    score++; gameNo++;
+    $("score").textContent=score;
+    setUndo("correct",justSolved);
+    playCorrect();
+    $("status").innerHTML="✅ Bonne réponse ! — <strong>"+justSolved+"</strong>";
+    setTimeout(()=>{if(Date.now()<endAt)showCountdownThenPick()},250);
+  }
+}
+function startRecognition(){
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SR){$("status").textContent="Micro indisponible : utilise la saisie de secours.";return;}
+  recognition=new SR();
+  recognition.lang="fr-CA";
+  recognition.continuous=true;
+  recognition.interimResults=true;
+  recognition.maxAlternatives=5;
+  recognition.onresult=e=>{
+    for(let i=e.resultIndex;i<e.results.length;i++){
+      const result=e.results[i];
+      if(result.isFinal){
+        // Le moteur renvoie plusieurs interprétations du même énoncé ;
+        // handleAnswer verrouille "current" dès la première qui compte,
+        // donc les alternatives suivantes n'ont plus aucun effet.
+        for(const alt of result) handleAnswer(alt.transcript);
+      }else{
+        // Résultat provisoire : on ne valide que si c'est une correspondance
+        // exacte immédiate, pour accélérer sans risquer de faux positifs.
+        const text=result[0].transcript;
+        if(current && normalize(text)===normalize(current)) handleAnswer(text);
+      }
+    }
+  };
+  recognition.onerror=e=>{
+    $("debug").textContent="Micro : "+e.error;
+    if(["not-allowed","service-not-allowed"].includes(e.error)){
+      $("status").textContent="⚠️ Autorise le micro dans Chrome.";
+      listening=false;
+      $("micDot").classList.add("hidden");
+    }
+    // Les erreurs "no-speech"/"network"/"audio-capture" sont transitoires :
+    // on laisse onend relancer l'écoute automatiquement.
+  };
+  recognition.onend=()=>{
+    if(listening && Date.now()<endAt){
+      setTimeout(()=>{if(listening && Date.now()<endAt){try{recognition.start()}catch(e){}}},200);
+    }
+  };
+  try{recognition.start();listening=true;$("micDot").classList.remove("hidden")}
+  catch(e){$("status").textContent="⚠️ Impossible de démarrer le micro."}
+}
+function stopRecognition(){
+  listening=false;
+  $("micDot").classList.add("hidden");
+  if(recognition){try{recognition.stop()}catch(e){}}
+}
+function finish(){
+  if(timerId){clearInterval(timerId);timerId=null}
+  if(countdownTimer){clearInterval(countdownTimer);countdownTimer=null}
+  clearReshuffle();
+  stopRecognition();
+  releaseWakeLock();
+  playEnd();
+  $("game").classList.add("hidden"); $("end").classList.remove("hidden");
+  $("resultScore").textContent=score;
+  $("summaryLists").innerHTML =
+    "<p><b>✅ Trouvés ("+foundGames.length+")</b> : "+(foundGames.length?foundGames.map(escapeHtml).join(", "):"—")+"</p>"+
+    "<p><b>⏭ Passés ("+passedGames.length+")</b> : "+(passedGames.length?passedGames.map(escapeHtml).join(", "):"—")+"</p>";
+  $("playerName").value="";
+  $("saveScoreBtn").disabled=false;
+  $("saveScoreBtn").textContent="💾 Enregistrer";
+  renderHighScores();
+}
+$("startBtn").onclick=()=>{
+  const mins=Math.max(1,Math.min(30,Number($("duration").value)||5));
+  score=0; gameNo=0; foundGames=[]; passedGames=[]; lastTickSec=null;
+  sharedOrder=shuffledGames(); wordPointer=0;
+  undoState=null; $("undoBtn").disabled=true;
+  paused=false; $("pauseBtn").textContent="⏸ Pause";
+  $("score").textContent="0";$("start").classList.add("hidden");$("end").classList.add("hidden");$("game").classList.remove("hidden");
+  if(!audioCtx){ try{ audioCtx=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} }
+  if(audioCtx && audioCtx.state==="suspended") audioCtx.resume().catch(()=>{});
+  requestWakeLock();
+  endAt=Date.now()+mins*60000;
+  updateTimer();
+  timerId=setInterval(updateTimer,250);
+  startRecognition();
+  showCountdownThenPick();
+};
+$("masterBtn").onclick=()=>{
+  if(!current || Date.now()>=endAt) return;
+  const justSolved=current;
+  current=null;
+  clearReshuffle();
+  foundGames.push(justSolved);
+  score++; gameNo++;
+  $("score").textContent=score;
+  setUndo("correct",justSolved);
+  playCorrect();
+  $("status").innerHTML="✅ Validé par le maître du jeu ! — <strong>"+justSolved+"</strong>";
+  setTimeout(()=>{if(Date.now()<endAt)showCountdownThenPick()},250);
+};
+$("passBtn").onclick=()=>{
+  if(!current || Date.now()>=endAt) return;
+  const justSolved=current;
+  current=null;
+  clearReshuffle();
+  passedGames.push(justSolved);
+  setUndo("pass",justSolved);
+  $("status").innerHTML="⏭ Passé ! — <strong>"+justSolved+"</strong>";
+  gameNo++;
+  setTimeout(()=>{if(Date.now()<endAt)showCountdownThenPick()},1400);
+};
+// Annule la dernière action du maître du jeu : retire le point/le passage
+// et remet immédiatement le même mot en jeu (au lieu d'en piocher un autre).
+$("undoBtn").onclick=()=>{
+  if(!undoState || Date.now()>=endAt) return;
+  if(countdownTimer){clearInterval(countdownTimer);countdownTimer=null}
+  if(undoState.type==="correct"){
+    const idx=foundGames.lastIndexOf(undoState.word);
+    if(idx>-1) foundGames.splice(idx,1);
+    score=Math.max(0,score-1);
+    $("score").textContent=score;
+  }else{
+    const idx=passedGames.lastIndexOf(undoState.word);
+    if(idx>-1) passedGames.splice(idx,1);
+  }
+  gameNo=Math.max(0,gameNo-1);
+  current=undoState.word;
+  wordPointer=Math.max(0,wordPointer-1);
+  hintRevealed=0;
+  $("hint").textContent="";
+  presentCurrent();
+  $("status").textContent="↩ Annulé — ce mot est remis en jeu.";
+  undoState=null;
+  $("undoBtn").disabled=true;
+};
+// Met le chrono, le micro et les minuteurs en pause ; reprend exactement
+// où la partie en était (décalage du temps restant, même mot si applicable).
+$("pauseBtn").onclick=()=>{
+  if(!paused){
+    if(!timerId && !current) return; // partie pas vraiment en cours
+    paused=true;
+    pausedDuringCountdown=!!countdownTimer;
+    pauseStarted=Date.now();
+    if(timerId){clearInterval(timerId);timerId=null}
+    if(countdownTimer){clearInterval(countdownTimer);countdownTimer=null}
+    clearReshuffle();
+    stopRecognition();
+    $("pauseBtn").textContent="▶ Reprendre";
+    $("status").textContent="⏸ En pause";
+  }else{
+    paused=false;
+    endAt+=(Date.now()-pauseStarted);
+    $("pauseBtn").textContent="⏸ Pause";
+    updateTimer();
+    timerId=setInterval(updateTimer,250);
+    startRecognition();
+    if(pausedDuringCountdown || !current){
+      showCountdownThenPick();
+    }else{
+      $("status").textContent="🎤 Écoute…";
+      presentCurrent();
+    }
+  }
+};
+$("stopBtn").onclick=finish;
+$("againBtn").onclick=()=>{$("end").classList.add("hidden");$("start").classList.remove("hidden")};
+$("manualBtn").onclick=()=>{const v=$("manualInput").value.trim();if(v){handleAnswer(v);$("manualInput").value=""}};
+$("manualInput").addEventListener("keydown",e=>{if(e.key==="Enter")$("manualBtn").click()});
+const hasSR=!!(window.SpeechRecognition||window.webkitSpeechRecognition);
+$("support").textContent=hasSR ? "✓ Reconnaissance vocale détectée. Chrome demandera l’autorisation du micro au démarrage." : "⚠️ Ce navigateur ne semble pas proposer la reconnaissance vocale Web. Utilise Chrome Android.";
+renderHighScores();
+</script>
+</body>
+</html>
